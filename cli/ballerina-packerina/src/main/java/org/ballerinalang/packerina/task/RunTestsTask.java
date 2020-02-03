@@ -18,32 +18,45 @@
 
 package org.ballerinalang.packerina.task;
 
+import org.ballerinalang.coverage.ExecutionCoverageBuilder;
 import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.packerina.buildcontext.BuildContext;
 import org.ballerinalang.packerina.buildcontext.BuildContextField;
-import org.ballerinalang.testerina.util.TestarinaClassLoader;
-import org.ballerinalang.testerina.util.TesterinaUtils;
-import org.wso2.ballerinalang.compiler.semantics.model.symbols.BPackageSymbol;
+import org.ballerinalang.testerina.core.TesterinaConstants;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
-import org.wso2.ballerinalang.compiler.tree.BLangTestablePackage;
+import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
+import org.wso2.ballerinalang.util.Lists;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+
+import static org.wso2.ballerinalang.compiler.util.ProjectDirConstants.BALLERINA_HOME;
+import static org.wso2.ballerinalang.compiler.util.ProjectDirConstants.BALLERINA_HOME_BRE;
+import static org.wso2.ballerinalang.compiler.util.ProjectDirConstants.BALLERINA_HOME_LIB;
 
 /**
  * Task for executing tests.
  */
 public class RunTestsTask implements Task {
+    private boolean generateCoverage;
+    private String[] programArgs;
+
+    public RunTestsTask(boolean generateCoverage, String[] programArgs) {
+        this.generateCoverage = generateCoverage;
+        this.programArgs = programArgs.clone();
+    }
 
     @Override
     public void execute(BuildContext buildContext) {
         Path sourceRootPath = buildContext.get(BuildContextField.SOURCE_ROOT);
+        Path targetDirPath = buildContext.get(BuildContextField.TARGET_DIR);
 
-        Map<BLangPackage, TestarinaClassLoader> programFileMap = new HashMap<>();
         List<BLangPackage> moduleBirMap = buildContext.getModules();
         // Only tests in packages are executed so default packages i.e. single bal files which has the package name
         // as "." are ignored. This is to be consistent with the "ballerina test" command which only executes tests
@@ -64,53 +77,111 @@ public class RunTestsTask implements Task {
             //     <org-name>/<package-name>:<version>
             //         No tests found
             // }
-            Path jarPath = buildContext.getTestJarPathFromTargetCache(packageID);
-            Path modulejarPath = buildContext.getJarPathFromTargetCache(packageID);
+            Path testJarPath = buildContext.getTestJarPathFromTargetCache(packageID);
+            Path testModuleJarPath = buildContext.getJarPathFromTargetCache(packageID);
+            Path testModuleJarFile = testModuleJarPath.getFileName();
+            String testModuleJarFileName = testModuleJarFile != null ? testModuleJarFile.toString() : "";
             // subsitute test jar if module jar if tests not exists
-            if (Files.notExists(jarPath)) {
-                jarPath = modulejarPath;
+            if (Files.notExists(testJarPath)) {
+                testJarPath = testModuleJarPath;
             }
 
-            HashSet<Path> moduleDependencies = buildContext.moduleDependencyPathMap.get(packageID).platformLibs;
-            // create a new set so that original set is not affected with test dependencies
-            HashSet<Path> dependencyJarPaths = new HashSet<>(moduleDependencies);
-
-            if (bLangPackage.containsTestablePkg()) {
-                for (BLangTestablePackage testablePackage : bLangPackage.getTestablePkgs()) {
-                    // find the set of dependency jar paths for running test for this module and update
-                    updateDependencyJarPaths(testablePackage.symbol.imports, buildContext, dependencyJarPaths);
-                }
+            if (this.generateCoverage) {
+                String orgName = bLangPackage.packageID.getOrgName().toString();
+                String packageName = bLangPackage.packageID.getName().toString();
+                generateCoverageReportForTestRun(testModuleJarFileName, testJarPath, sourceRootPath, targetDirPath,
+                        orgName, packageName, buildContext);
+            } else {
+                readDataFromJsonAndLaunchTestSuit(testModuleJarFileName, targetDirPath, testJarPath, buildContext);
             }
-
-            // Create a class loader to run tests.
-            TestarinaClassLoader classLoader = new TestarinaClassLoader(jarPath, dependencyJarPaths);
-            programFileMap.put(bLangPackage, classLoader);
-        }
-        if (programFileMap.size() > 0) {
-            TesterinaUtils.executeTests(sourceRootPath, programFileMap, buildContext.out(), buildContext.err());
         }
     }
 
-    private void updateDependencyJarPaths(List<BPackageSymbol> importPackageSymbols, BuildContext buildContext,
-                                          HashSet<Path> dependencyJarPaths) {
-        for (BPackageSymbol importPackageSymbol : importPackageSymbols) {
-            PackageID importPkgId = importPackageSymbol.pkgID;
-            if (!buildContext.moduleDependencyPathMap.containsKey(importPkgId)) {
-                continue;
-            }
-            // add imported module's dependent jar paths
-            HashSet<Path> testDependencies = buildContext.moduleDependencyPathMap.get(importPkgId).platformLibs;
-            dependencyJarPaths.addAll(testDependencies);
+    /**
+     * Generate the coverage report from a test run.
+     *
+     * @param moduleJarName file name to search for a directory
+     * @param testJarPath path to the this testable jar file
+     * @param sourceRootPath path of the source root.
+     * @param targetDirPath path of the target directory
+     * @param orgName organization name derived from the bLangPackage
+     * @param packageName package name derived from the bLangPackage
+     * @param buildContext buildContext to show some basic outputs
+     */
+    private void generateCoverageReportForTestRun(String moduleJarName, Path testJarPath, Path sourceRootPath,
+                                                  Path targetDirPath, String orgName, String packageName,
+                                                  BuildContext buildContext) {
+        ExecutionCoverageBuilder coverageBuilder = new ExecutionCoverageBuilder(sourceRootPath, targetDirPath,
+                testJarPath, this.programArgs, orgName, moduleJarName, packageName);
+        boolean execFileGenerated = coverageBuilder.generateExecFile();
+        buildContext.out().println("\nGenerating the coverage report");
+        if (execFileGenerated) {
+            // unzip the compiled source
+            coverageBuilder.unzipCompiledSource();
+            // copy the content as described with package naming
+            coverageBuilder.createSourceFileDirectory();
+            // generate the coverage report
+            coverageBuilder.generateCoverageReport();
+            buildContext.out().println("\ttarget/coverage/" + moduleJarName);
+        } else {
+            buildContext.out().println("Couldn't create the Coverage. Please try again.");
+        }
+    }
 
-            // add imported module's jar path
-            Path testJarPath = buildContext.getTestJarPathFromTargetCache(importPkgId);
-            Path moduleJarPath = buildContext.getJarPathFromTargetCache(importPkgId);
-            if (Files.exists(testJarPath)) {
-                dependencyJarPaths.add(testJarPath);
-            } else if (Files.exists(moduleJarPath)) {
-                dependencyJarPaths.add(moduleJarPath);
+    /**
+     * Run the tests by reading and passing data from a json file.
+     *  @param moduleJarName directory to find the json file
+     * @param targetPath target path to resolve the json cache directory
+     * @param testJarPath path of the thin testable jar
+     * @param buildContext build context to show some basic outputs
+     */
+    private void readDataFromJsonAndLaunchTestSuit(String moduleJarName, Path targetPath, Path testJarPath
+            , BuildContext buildContext) {
+        Path jsonCachePath = targetPath.resolve(ProjectDirConstants.CACHES_DIR_NAME)
+                .resolve(ProjectDirConstants.JSON_CACHE_DIR_NAME).resolve(moduleJarName);
+        Path balDependencyPath = Paths.get(System.getProperty(BALLERINA_HOME)).resolve(BALLERINA_HOME_BRE)
+                .resolve(BALLERINA_HOME_LIB);
+        String javaCommand = System.getProperty("java.command");
+        String filePathSeparator = System.getProperty("file.separator");
+        String classPathSeparator = System.getProperty("path.separator");
+        String launcherClassName = TesterinaConstants.TESTERINA_EXECUTOR_CLASS_NAME;
+        String classPaths = balDependencyPath.toString() + filePathSeparator + "*"
+                + classPathSeparator + testJarPath.toString();
+
+        // building the java command
+        List<String> commands = new ArrayList<>();
+        commands.add(javaCommand); // java command that is used by ballerina
+        commands.add("-cp"); // terminal option to set the classpath
+        commands.add(classPaths); // set the class paths including testable thin jat
+        commands.add(launcherClassName); // launcher main class name
+        if (this.programArgs != null) {
+            commands.addAll(Lists.of(this.programArgs));
+        }
+
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder(commands);
+            processBuilder.environment().put("testerina.tesetsuite.path", jsonCachePath.toString());
+            Process proc = processBuilder.start();
+            proc.waitFor();
+
+            // Then retrieve the process output
+            InputStream in = proc.getInputStream();
+            InputStream err = proc.getErrorStream();
+            int outputStreamLength;
+
+            byte[] b = new byte[in.available()];
+            outputStreamLength = in.read(b, 0, b.length);
+            if (outputStreamLength > 0) {
+                buildContext.out().println(new String(b, StandardCharsets.UTF_8));
             }
-            updateDependencyJarPaths(importPackageSymbol.imports, buildContext, dependencyJarPaths);
+
+            byte[] c = new byte[err.available()];
+            outputStreamLength = err.read(c, 0, c.length);
+            if (outputStreamLength > 0) {
+                buildContext.out().println(new String(c, StandardCharsets.UTF_8));
+            }
+        } catch (IOException | InterruptedException e) {
+            buildContext.err().println(e);
         }
     }
 }
