@@ -21,11 +21,14 @@ package org.ballerinalang.cli.bbgen.components;
 import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.balType;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.isStaticField;
 import static org.ballerinalang.cli.bbgen.utils.Constants.ACCESS_FIELD;
 import static org.ballerinalang.cli.bbgen.utils.Constants.ACCESS_FIELD_INTEROP_TYPE;
+import static org.ballerinalang.cli.bbgen.utils.Constants.BALLERINA_RESERVED_WORDS;
 import static org.ballerinalang.cli.bbgen.utils.Constants.MUTATE_FIELD;
 import static org.ballerinalang.cli.bbgen.utils.Constants.MUTATE_FIELD_INTEROP_TYPE;
 
@@ -56,6 +59,10 @@ class JField {
             this.fieldMethodName = "set" + StringUtils.capitalize(this.fieldName);
             interopType = MUTATE_FIELD_INTEROP_TYPE;
             this.isSetter = true;
+        }
+        List<String> reservedWords = Arrays.asList(BALLERINA_RESERVED_WORDS);
+        if (reservedWords.contains(fieldMethodName)){
+            "'".concat(this.fieldMethodName);
         }
     }
 }

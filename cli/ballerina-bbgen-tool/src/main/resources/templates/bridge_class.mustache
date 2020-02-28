@@ -8,31 +8,35 @@ public type {{shortClassName}} object {
         {{#singleConstructor}}self.jObj = {{#constructorList}}{{prefix}}_{{constructorName}}({{#parameters}}{{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}{{/constructorList}});{{/singleConstructor}}
     }{{#methodList}}{{#isInstance}}
 
-    public function {{methodName}}({{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}) {{#hasReturn}}returns {{returnType}} {{/hasReturn}}{
-        {{#hasReturn}}return {{/hasReturn}}{{#noReturn}}_ = {{/noReturn}}{{prefix}}_{{methodName}}(self.jObj{{#noParams}}, {{/noParams}}{{#parameters}}{{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}});
+    public function {{#reservedWord}}{{#controlChars methodName ""}}{{/controlChars}}{{/reservedWord}}{{#noReservedWord}}{{methodName}}{{/noReservedWord}}({{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}) {{#hasReturn}}returns {{returnType}}{{#exceptionTypes}}|error{{/exceptionTypes}} {{/hasReturn}}{{#noReturn}}{{#exceptionTypes}}returns error? {{/exceptionTypes}}{{/noReturn}}{
+        {{#hasReturn}}return {{/hasReturn}}{{#noReturn}}_ = {{/noReturn}}{{#exceptionTypes}}check {{/exceptionTypes}}{{prefix}}_{{methodName}}(self.jObj{{#noParams}}, {{/noParams}}{{#parameters}}{{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}});
     }{{/isInstance}}{{/methodList}}
 };
 {{#initFunctionList}}
-public function {{prefix}}{{constructorName}}({{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}) returns {{shortClassName}} {
-    handle obj = {{prefix}}_{{externalFunctionName}}({{#parameters}}{{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}});
-    {{shortClassName}} {{initObjectName}} = new();
-    {{initObjectName}}.jObj = obj;
-    return {{initObjectName}};
+public function {{prefix}}{{constructorName}}({{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}) returns {{shortClassName}}{{#exceptionTypes}}|error{{/exceptionTypes}} {
+    handle{{#exceptionTypes}}|error{{/exceptionTypes}} obj = {{prefix}}_{{externalFunctionName}}({{#parameters}}{{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}});
+    {{#exceptionTypes}}if (obj is handle) {
+        {{/exceptionTypes}}{{shortClassName}} {{initObjectName}} = new();
+    {{#exceptionTypes}}    {{/exceptionTypes}}{{initObjectName}}.jObj = obj;
+    {{#exceptionTypes}}    {{/exceptionTypes}}return {{initObjectName}};{{#exceptionTypes}}
+    } else {
+        return obj;
+    }{{/exceptionTypes}}
 }
 {{/initFunctionList}}
 {{#constructorList}}
-{{access}}function {{prefix}}_{{constructorName}}({{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}) returns handle = {{interopType}} {
+function {{prefix}}_{{constructorName}}({{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}) returns handle{{#exceptionTypes}}|error{{/exceptionTypes}} = {{interopType}} {
     class: "{{className}}",
     paramTypes: [{{#parameters}}"{{type}}"{{#notLast}}, {{/notLast}}{{/parameters}}]
 } external;
 {{/constructorList}}{{#methodList}}
-{{access}}function {{prefix}}_{{methodName}}({{#isInstance}}handle receiver{{#noParams}}, {{/noParams}}{{/isInstance}}{{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}) {{#hasReturn}}returns {{returnType}} {{/hasReturn}}= {{interopType}} {
+{{#isStatic}}public {{/isStatic}}function {{prefix}}_{{methodName}}({{#isInstance}}handle receiver{{#noParams}}, {{/noParams}}{{/isInstance}}{{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}) {{#hasReturn}}returns {{returnType}}{{#exceptionTypes}}|error{{/exceptionTypes}}{{/hasReturn}}{{#noReturn}}{{#exceptionTypes}}returns error?{{/exceptionTypes}}{{/noReturn}} = {{interopType}} {
     name: "{{javaMethodName}}",
     class: "{{className}}"{{#params}},
     paramTypes: [{{#parameters}}"{{type}}"{{#notLast}}, {{/notLast}}{{/parameters}}]{{/params}}
 } external;
 {{/methodList}}{{#fieldList}}
-{{access}}function {{prefix}}_{{fieldMethodName}}({{#isSetter}}handle receiver, {{returnType}} arg{{/isSetter}}) {{#hasReturn}}returns {{returnType}} {{/hasReturn}}= {{interopType}} {
+{{#isStatic}}public {{/isStatic}}function {{prefix}}_{{fieldMethodName}}({{#isSetter}}handle receiver, {{returnType}} arg{{/isSetter}}) {{#hasReturn}}returns {{returnType}}{{#exceptionTypes}}|error{{/exceptionTypes}}{{/hasReturn}} = {{interopType}} {
     name: "{{fieldName}}",
     class: "{{className}}"
 } external;{{/fieldList}}

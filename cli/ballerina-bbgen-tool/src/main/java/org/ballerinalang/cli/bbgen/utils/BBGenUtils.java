@@ -92,6 +92,12 @@ public class BBGenUtils {
         cpTemplateLoader.setSuffix(MUSTACHE_FILE_EXTENSION);
         fileTemplateLoader.setSuffix(MUSTACHE_FILE_EXTENSION);
         Handlebars handlebars = new Handlebars().with(cpTemplateLoader, fileTemplateLoader);
+        handlebars.registerHelper("controlChars", (object, options) -> {
+            if (object instanceof String) {
+                return "\'" + object;
+            }
+            return "";
+        });
         try {
             return handlebars.compile(templateName);
         } catch (FileNotFoundException e) {

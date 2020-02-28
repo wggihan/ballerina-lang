@@ -36,4 +36,14 @@ public class Constants {
     static final String TEMPLATES_DIR_PATH_KEY = "templates.dir.path";
     public static final String DEFAULT_TEMPLATE_DIR = "/templates";
     public static final String USER_DIR = "user.dir";
+    public static final String JAVA_UTILS_MODULE = "java_utils";
+    public static String[] BALLERINA_RESERVED_WORDS = {"import", "as", "public", "private", "external", "final",
+            "service", "resource", "function", "object", "record", "annotation", "parameter", "transformer",
+            "worker", "listener", "remote", "xmlns", "returns", "version", "channel", "abstract", "client", "const",
+            "typeof", "source", "on", "int", "byte", "float", "decimal", "boolean", "string", "error", "map", "json",
+            "xml", "table", "stream", "any", "typedesc", "type", "future", "anydata", "handle", "var", "new", "__init",
+            "if", "match", "else", "foreach", "while", "continue", "break", "fork", "join", "some", "all", "try",
+            "catch", "finally", "throw", "panic", "trap", "return", "transaction", "abort", "retry", "onretry",
+            "retries", "committed", "aborted", "with", "in", "lock", "untaint", "start", "but", "check", "checkpanic",
+            "primarykey", "is", "flush", "wait", "default", "from", "select", "where"};
 }

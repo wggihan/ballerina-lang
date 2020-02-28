@@ -19,6 +19,8 @@
 package org.ballerinalang.cli.bbgen;
 
 import java.io.PrintStream;
+import java.util.Arrays;
+import java.util.List;
 
 import org.ballerinalang.cli.bbgen.exceptions.BBGenException;
 import org.ballerinalang.tool.BLauncherCmd;
@@ -75,9 +77,19 @@ public class BBGenCommand implements BLauncherCmd {
             return;
         }
 
-        BridgeCodeGenerator bridgeCodeGenerator = new BridgeCodeGenerator(jarPath);
+        BridgeCodeGenerator bridgeCodeGenerator = new BridgeCodeGenerator();
+        if (this.outputPath != null) {
+            bridgeCodeGenerator.setOutputPath(outputPath);
+        }
         try {
-            bridgeCodeGenerator.generateBridgeCode();
+            if (this.jarPath != null) {
+                bridgeCodeGenerator.bindingsFromJar(this.jarPath);
+            } else if (this.mvnDependency != null) {
+                bridgeCodeGenerator.bindingsFromMvn(this.mvnDependency);
+            } else if (this.standardJavaClasses != null) {
+                List<String> classList = Arrays.asList(this.standardJavaClasses.split("\\s*,\\s*"));
+                bridgeCodeGenerator.stdJavaBindings(classList);
+            }
         } catch (BBGenException e) {
             LOG.error(e.getMessage());
         }

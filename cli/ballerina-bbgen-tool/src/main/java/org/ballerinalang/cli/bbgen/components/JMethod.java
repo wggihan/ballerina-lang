@@ -21,10 +21,12 @@ package org.ballerinalang.cli.bbgen.components;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.balType;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.isStaticMethod;
+import static org.ballerinalang.cli.bbgen.utils.Constants.BALLERINA_RESERVED_WORDS;
 import static org.ballerinalang.cli.bbgen.utils.Constants.METHOD_INTEROP_TYPE;
 
 /**
@@ -34,6 +36,7 @@ public class JMethod {
 
     public Boolean params = false;
     public String methodName;
+    public String objectMethodName;
 
     private Boolean isStatic;
     private Boolean isInstance;
@@ -53,11 +56,6 @@ public class JMethod {
         this.javaMethodName = m.getName();
         this.methodName = m.getName();
 
-        // TODO: Get the keywords in Ballerina and make sure they are not used for method names.
-        if (this.methodName.equals("is")) {
-            this.methodName = "isFunc";
-        }
-
         if (!m.getReturnType().equals(Void.TYPE)) {
             this.returnType = balType(m.getReturnType().getSimpleName());
             this.hasReturn = true;
@@ -68,7 +66,9 @@ public class JMethod {
         for (Parameter param : m.getParameters()) {
             this.parameters.add(new JParameter(param));
         }
-        this.exceptionTypes = true;
+        if (m.getExceptionTypes().length > 0) {
+            this.exceptionTypes = true;
+        }
         if (!this.parameters.isEmpty()) {
             JParameter lastParam = this.parameters.get(this.parameters.size() - 1);
             lastParam.setLastParam();
@@ -76,5 +76,9 @@ public class JMethod {
             this.noParams = false;
         }
         this.interopType = METHOD_INTEROP_TYPE;
+        List<String> reservedWords = Arrays.asList(BALLERINA_RESERVED_WORDS);
+        if (reservedWords.contains(methodName)){
+            "'".concat(this.methodName);
+        }
     }
 }

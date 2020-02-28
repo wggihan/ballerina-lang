@@ -29,8 +29,13 @@ import java.net.URLClassLoader;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+import static org.ballerinalang.cli.bbgen.components.JParameter.javaClasses;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.createDirectory;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.getClassNamesInJar;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.getModuleName;
@@ -39,6 +44,7 @@ import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.writeOutputFile;
 import static org.ballerinalang.cli.bbgen.utils.Constants.BAL_FILE_EXTENSION;
 import static org.ballerinalang.cli.bbgen.utils.Constants.BBGEN_CLASS_TEMPLATE_NAME;
 import static org.ballerinalang.cli.bbgen.utils.Constants.DEFAULT_TEMPLATE_DIR;
+import static org.ballerinalang.cli.bbgen.utils.Constants.JAVA_UTILS_MODULE;
 import static org.ballerinalang.cli.bbgen.utils.Constants.USER_DIR;
 
 /**
@@ -46,64 +52,107 @@ import static org.ballerinalang.cli.bbgen.utils.Constants.USER_DIR;
  */
 public class BridgeCodeGenerator {
 
-    private static final PrintStream errStream = System.err;
-    private static Path userDir = Paths.get(System.getProperty(USER_DIR));
     private String jarPathString;
-    private Boolean standardJava = false;
+    private String outputPath;
+    private List<String> stdClasses;
+    private String mvnDependency;
+    private Path modulePath;
+    private Path stdJavaModulePath;
+    private static final PrintStream errStream = System.err;
+    private static final PrintStream outStream = System.out;
+    private static Path userDir = Paths.get(System.getProperty(USER_DIR));
 
-    BridgeCodeGenerator(String jarPath) {
-        this.jarPathString =jarPath;
-    }
+    public void bindingsFromJar(String jarPath) throws BBGenException {
 
-    public void generateBridgeCode() throws BBGenException {
-
-        if (!standardJava) {
-            URLClassLoader classLoader = null;
-            Path jarPath = FileSystems.getDefault().getPath(jarPathString);
-            try {
-                URL[] url = {jarPath.toFile().toURI().toURL()};
-                classLoader = new URLClassLoader(url);
-            } catch (MalformedURLException e) {
-                errStream.println(e);
+        this.jarPathString = jarPath;
+        URLClassLoader classLoader = getClassLoader(jarPathString);
+        String moduleName = getModuleName(jarPathString);
+        if (outputPath == null) {
+            modulePath = Paths.get(userDir.toString(), moduleName);
+            stdJavaModulePath = Paths.get(userDir.toString(), JAVA_UTILS_MODULE);
+        } else {
+            modulePath = Paths.get(outputPath, moduleName);
+            stdJavaModulePath = Paths.get(outputPath, JAVA_UTILS_MODULE);
+        }
+        List<String> classes;
+        try {
+            classes = getClassNamesInJar(jarPathString);
+            if (classes != null) {
+                generateBindings(classes, classLoader, modulePath);
+                generateBindings(new ArrayList<>(javaClasses), classLoader, stdJavaModulePath);
+                outStream.println("Generated bindings for: " + moduleName);
             }
-            String moduleName = getModuleName(jarPathString);
-            Path modulePath = Paths.get(userDir.toString(), moduleName);
-            createDirectory(modulePath.toString());
-            List<String> classes = null;
+        } catch (IOException e) {
+            errStream.println(e);
+        } finally {
             try {
-                classes = getClassNamesInJar(jarPathString);
-                if (!classes.isEmpty()) {
-                    for (String c : classes) {
-                        try {
-                            if (classLoader != null) {
-                                Class classInstance = classLoader.loadClass(c);
-                                if (classInstance != null && isPublicClass(classInstance) && !classInstance.isEnum()
-                                        && !classInstance.isInterface()) {
-                                    JClass jClass = new JClass(classInstance);
-                                    String outputFile = Paths.get(modulePath.toString(), jClass.packageName).toString();
-                                    String filePath = Paths.get(outputFile,jClass.shortClassName + BAL_FILE_EXTENSION)
-                                            .toString();
-                                    createDirectory(outputFile);
-                                    writeOutputFile(jClass, DEFAULT_TEMPLATE_DIR, BBGEN_CLASS_TEMPLATE_NAME,
-                                            filePath);
-                                }
-                            }
-                        } catch (ClassNotFoundException e) {
-                            errStream.println("Class not found: " + c);
-                        } catch (BBGenException e) {
-                            throw new BBGenException("Error while generating Ballerina bridge code: " + e);
-                        }
-                    }
-                }
+                assert classLoader != null;
+                classLoader.close();
             } catch (IOException e) {
                 errStream.println(e);
-            } finally {
-                try {
-                    assert classLoader != null;
-                    classLoader.close();
-                } catch (IOException e) {
-                    errStream.println(e);
+            }
+        }
+    }
+
+    public void bindingsFromMvn(String mvnDependency) {
+
+        this.mvnDependency = mvnDependency;
+    }
+
+    public void stdJavaBindings(List<String> stdClasses) throws BBGenException {
+
+        this.stdClasses = stdClasses;
+        if (outputPath == null) {
+            stdJavaModulePath = Paths.get(userDir.toString(), JAVA_UTILS_MODULE);
+        } else {
+            stdJavaModulePath = Paths.get(outputPath, JAVA_UTILS_MODULE);
+        }
+        if (this.stdClasses != null) {
+            generateBindings(this.stdClasses, this.getClass().getClassLoader(), stdJavaModulePath);
+            outStream.println("Generated bindings for: " + JAVA_UTILS_MODULE);
+        }
+    }
+
+    public void setOutputPath(String outputPath) {
+
+        this.outputPath = outputPath;
+    }
+
+    private URLClassLoader getClassLoader(String jarPathString) throws BBGenException {
+
+        URLClassLoader classLoader = null;
+        Path jarPath = FileSystems.getDefault().getPath(jarPathString);
+        try {
+            URL[] url = {jarPath.toFile().toURI().toURL()};
+            classLoader = (URLClassLoader) AccessController.doPrivileged((PrivilegedAction) ()
+                    -> new URLClassLoader(url));
+        } catch (MalformedURLException e) {
+            throw new BBGenException("Error while processing the jar path: ", e);
+        }
+        return classLoader;
+    }
+
+    public void generateBindings(List<String> classList, ClassLoader classLoader, Path modulePath)
+            throws BBGenException {
+
+        createDirectory(modulePath.toString());
+        for (String c : classList) {
+            try {
+                if (classLoader != null) {
+                    Class classInstance = classLoader.loadClass(c);
+                    if (classInstance != null && isPublicClass(classInstance) && !classInstance.isEnum()
+                            && !classInstance.isInterface()) {
+                        JClass jClass = new JClass(classInstance);
+                        String outputFile = Paths.get(modulePath.toString(), jClass.packageName).toString();
+                        createDirectory(outputFile);
+                        String filePath = Paths.get(outputFile, jClass.shortClassName + BAL_FILE_EXTENSION).toString();
+                        writeOutputFile(jClass, DEFAULT_TEMPLATE_DIR, BBGEN_CLASS_TEMPLATE_NAME, filePath);
+                    }
                 }
+            } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                System.err.println("Bindings for class " + c + " could not be created:\n" + e);
+            } catch (BBGenException e) {
+                throw new BBGenException("Error while generating Ballerina bridge code: " + e);
             }
         }
     }
