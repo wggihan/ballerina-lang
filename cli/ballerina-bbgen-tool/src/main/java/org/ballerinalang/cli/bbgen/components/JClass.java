@@ -25,7 +25,9 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.ballerinalang.cli.bbgen.components.JParameter.javaClasses;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.handleOverloadedMethods;
+import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.isAbstractClass;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.isFinalField;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.isPublicField;
 import static org.ballerinalang.cli.bbgen.utils.BBGenUtils.isPublicMethod;
@@ -41,15 +43,29 @@ public class JClass {
     private String className;
     private String prefix;
     private Boolean singleConstructor = false;
+    private Boolean isInterface = false;
     private List<JConstructor> initFunctionList = new ArrayList<>();
     private List<JConstructor> constructorList = new ArrayList<>();
     private List<JMethod> methodList = new ArrayList<>();
     private List<JField> fieldList = new ArrayList<>();
+    List<String> superClasses = new ArrayList<>();
 
     private static final PrintStream errStream = System.err;
 
     public JClass(Class c) {
 
+        Class sClass = c.getSuperclass();
+        while (sClass != null) {
+            if (sClass.getName().equals("java.lang.Object")) {
+                break;
+            }
+            javaClasses.add(sClass.getName());
+            superClasses.add(sClass.getName());
+            sClass = sClass.getSuperclass();
+        }
+        if (c.isInterface() || isAbstractClass(c)) {
+            this.isInterface = true;
+        }
         this.className = c.getName();
         this.prefix = this.className.replace(".", "_").replace("$", "_");
         this.shortClassName = c.getSimpleName();
@@ -76,7 +92,7 @@ public class JClass {
     }
 
     private void populateInitFunctions() {
-        int j = 0;
+        int j = 1;
         for (JConstructor constructor : this.constructorList) {
             JConstructor newCons = null;
             try {

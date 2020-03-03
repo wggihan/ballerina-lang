@@ -43,6 +43,7 @@ public class BBGenCommand implements BLauncherCmd {
 
     private static final Logger LOG = LoggerFactory.getLogger(BBGenCommand.class);
     private static final PrintStream outStream = System.out;
+    private static final PrintStream outError = System.err;
 
     private CommandLine parentCmdParser;
 
@@ -53,12 +54,21 @@ public class BBGenCommand implements BLauncherCmd {
             description = "Path to the jar file from which the interop code is to be generated.")
     private String jarPath;
 
-    @CommandLine.Option(names = {"--mvn"},
-            description = "Maven dependency details for which the bridge code is to be generated."
-    )
-    private String mvnDependency;
+    @CommandLine.Option(names = {"-pn", "--package-name"},
+            description = "Comma-delimited FQNs of packages for which the bridge code is to be generated.")
+    private String packages;
 
-    @CommandLine.Option(names = {"--output"},
+    @CommandLine.Option(names = {"-a", "--alias"},
+            description = "Comma-delimited aliases for the package names."
+    )
+    private String aliases;
+
+    @CommandLine.Option(names = {"-d", "--dependencies"},
+            description = "Direct and transitive dependencies required for loading the jar file."
+    )
+    private String dependencies;
+
+    @CommandLine.Option(names = {"-o", "--output"},
             description = "Location for generated jBallerina bridge code."
     )
     private String outputPath;
@@ -66,6 +76,15 @@ public class BBGenCommand implements BLauncherCmd {
     @CommandLine.Option(names = {"-cn", "--class-name"},
             description = "Comma-delimited FQNs of standard Java classes for which the bridge code is to be generated.")
     private String standardJavaClasses;
+
+    @CommandLine.Option(names = {"--mvn"},
+            description = "Maven dependency details for which the bridge code is to be generated."
+    )
+    private String mvnDependency;
+
+    private String[] packageList;
+    private String[] aliasList;
+    private String[] dependencyList;
 
     @Override
     public void execute() {
@@ -81,6 +100,23 @@ public class BBGenCommand implements BLauncherCmd {
         if (this.outputPath != null) {
             bridgeCodeGenerator.setOutputPath(outputPath);
         }
+        if (this.dependencies != null) {
+            this.dependencyList = this.dependencies.split("\\s*,\\s*");
+            bridgeCodeGenerator.setDependentJars(this.dependencyList);
+        }
+        if (this.packages != null) {
+            this.packageList = this.packages.split("\\s*,\\s*");
+            bridgeCodeGenerator.setPackageNames(this.packageList);
+        }
+        if (this.aliases != null) {
+            this.aliasList = this.aliases.split("\\s*,\\s*");
+            if (this.aliasList.length != this.packageList.length) {
+                outError.println("Number of aliases provided does not match with the number of packages.");
+                return;
+            }
+            bridgeCodeGenerator.setPackageNames(this.aliasList);
+        }
+
         try {
             if (this.jarPath != null) {
                 bridgeCodeGenerator.bindingsFromJar(this.jarPath);

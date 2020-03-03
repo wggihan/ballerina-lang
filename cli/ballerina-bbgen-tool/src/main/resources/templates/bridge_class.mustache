@@ -4,7 +4,7 @@ public type {{shortClassName}} object {
 
     handle jObj = java:createNull();
 
-    {{#singleConstructor}}public {{/singleConstructor}}function __init({{#singleConstructor}}{{#constructorList}}{{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}{{/constructorList}}{{/singleConstructor}}) {
+    public function __init({{#singleConstructor}}{{#constructorList}}{{#parameters}}{{shortTypeName}} {{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}{{/constructorList}}{{/singleConstructor}}) {
         {{#singleConstructor}}self.jObj = {{#constructorList}}{{prefix}}_{{constructorName}}({{#parameters}}{{fieldName}}{{#notLast}}, {{/notLast}}{{/parameters}}{{/constructorList}});{{/singleConstructor}}
     }{{#methodList}}{{#isInstance}}
 

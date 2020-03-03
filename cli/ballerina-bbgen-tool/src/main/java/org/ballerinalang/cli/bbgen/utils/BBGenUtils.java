@@ -149,38 +149,44 @@ public class BBGenUtils {
 
     public static boolean isPublicField(Field field) {
 
-        int modifers = field.getModifiers();
-        return Modifier.isPublic(modifers);
+        int modifiers = field.getModifiers();
+        return Modifier.isPublic(modifiers);
     }
 
     public static boolean isPublicMethod(Method method) {
 
-        int modifers = method.getModifiers();
-        return Modifier.isPublic(modifers);
+        int modifiers = method.getModifiers();
+        return Modifier.isPublic(modifiers);
     }
 
     public static boolean isPublicClass(Class javaClass) {
 
-        int modifers = javaClass.getModifiers();
-        return Modifier.isPublic(modifers);
+        int modifiers = javaClass.getModifiers();
+        return Modifier.isPublic(modifiers);
     }
 
     public static boolean isStaticField(Field field) {
 
-        int modifers = field.getModifiers();
-        return Modifier.isStatic(modifers);
+        int modifiers = field.getModifiers();
+        return Modifier.isStatic(modifiers);
     }
 
     public static boolean isStaticMethod(Method method) {
 
-        int modifers = method.getModifiers();
-        return Modifier.isStatic(modifers);
+        int modifiers = method.getModifiers();
+        return Modifier.isStatic(modifiers);
     }
 
     public static boolean isFinalField(Field field) {
 
-        int modifers = field.getModifiers();
-        return Modifier.isFinal(modifers);
+        int modifiers = field.getModifiers();
+        return Modifier.isFinal(modifiers);
+    }
+
+    public static boolean isAbstractClass(Class javaClass) {
+
+        int modifiers = javaClass.getModifiers();
+        return Modifier.isAbstract(modifiers);
     }
 
     public static Set<JClass> getClasses(URLClassLoader classLoader, List<String> classNames) {

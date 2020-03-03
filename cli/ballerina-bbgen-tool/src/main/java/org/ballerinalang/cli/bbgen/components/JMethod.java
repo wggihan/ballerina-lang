@@ -43,6 +43,8 @@ public class JMethod {
     private Boolean noParams = true;
     private Boolean noReturn = true;
     private Boolean hasReturn = false;
+    private Boolean reservedWord = false;
+    private Boolean noReservedWord = true;
     private Boolean exceptionTypes = false;
 
     private String returnType;
@@ -78,7 +80,8 @@ public class JMethod {
         this.interopType = METHOD_INTEROP_TYPE;
         List<String> reservedWords = Arrays.asList(BALLERINA_RESERVED_WORDS);
         if (reservedWords.contains(methodName)){
-            "'".concat(this.methodName);
+            this.reservedWord = true;
+            this.noReservedWord = false;
         }
     }
 }

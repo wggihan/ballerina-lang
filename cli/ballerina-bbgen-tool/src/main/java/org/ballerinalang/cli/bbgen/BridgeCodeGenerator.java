@@ -32,7 +32,7 @@ import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.ballerinalang.cli.bbgen.components.JParameter.javaClasses;
@@ -55,6 +55,8 @@ public class BridgeCodeGenerator {
     private String jarPathString;
     private String outputPath;
     private List<String> stdClasses;
+    private List<String> dependentJars;
+    private List<String> packageNames;
     private String mvnDependency;
     private Path modulePath;
     private Path stdJavaModulePath;
@@ -65,18 +67,22 @@ public class BridgeCodeGenerator {
     public void bindingsFromJar(String jarPath) throws BBGenException {
 
         this.jarPathString = jarPath;
-        URLClassLoader classLoader = getClassLoader(jarPathString);
+        this.dependentJars.add(this.jarPathString);
+        URLClassLoader classLoader = getClassLoader(this.dependentJars);
         String moduleName = getModuleName(jarPathString);
         if (outputPath == null) {
             modulePath = Paths.get(userDir.toString(), moduleName);
-            stdJavaModulePath = Paths.get(userDir.toString(), JAVA_UTILS_MODULE);
+            stdJavaModulePath = Paths.get(userDir.toString(), moduleName);
         } else {
             modulePath = Paths.get(outputPath, moduleName);
-            stdJavaModulePath = Paths.get(outputPath, JAVA_UTILS_MODULE);
+            stdJavaModulePath = Paths.get(outputPath, moduleName);
         }
         List<String> classes;
         try {
             classes = getClassNamesInJar(jarPathString);
+            if (packageNames != null) {
+                filterClasses(packageNames, classes);
+            }
             if (classes != null) {
                 generateBindings(classes, classLoader, modulePath);
                 generateBindings(new ArrayList<>(javaClasses), classLoader, stdJavaModulePath);
@@ -90,6 +96,22 @@ public class BridgeCodeGenerator {
                 classLoader.close();
             } catch (IOException e) {
                 errStream.println(e);
+            }
+        }
+    }
+
+    private void filterClasses(List<String> packages, List<String> classes) {
+
+        boolean remove = true;
+        for (String className : classes) {
+            for (String packageName : packages) {
+                if (className.startsWith(packageName)) {
+                    remove = false;
+                    break;
+                }
+            }
+            if (remove) {
+                classes.remove(className);
             }
         }
     }
@@ -118,18 +140,30 @@ public class BridgeCodeGenerator {
         this.outputPath = outputPath;
     }
 
-    private URLClassLoader getClassLoader(String jarPathString) throws BBGenException {
+    private URLClassLoader getClassLoader(List<String> jarPaths) throws BBGenException {
 
-        URLClassLoader classLoader = null;
-        Path jarPath = FileSystems.getDefault().getPath(jarPathString);
+        URLClassLoader classLoader;
+        List<URL> urls = new ArrayList<>();
         try {
-            URL[] url = {jarPath.toFile().toURI().toURL()};
+            for (String path : jarPaths) {
+                urls.add(FileSystems.getDefault().getPath(path).toFile().toURI().toURL());
+            }
             classLoader = (URLClassLoader) AccessController.doPrivileged((PrivilegedAction) ()
-                    -> new URLClassLoader(url));
+                    -> new URLClassLoader(urls.toArray(new URL[urls.size()])));
         } catch (MalformedURLException e) {
             throw new BBGenException("Error while processing the jar path: ", e);
         }
         return classLoader;
+    }
+
+    public void setDependentJars(String[] jarPaths) {
+
+        Collections.addAll(this.dependentJars, jarPaths);
+    }
+
+    public void setPackageNames(String[] packageNames) {
+
+        Collections.addAll(this.packageNames, packageNames);
     }
 
     public void generateBindings(List<String> classList, ClassLoader classLoader, Path modulePath)
@@ -140,8 +174,7 @@ public class BridgeCodeGenerator {
             try {
                 if (classLoader != null) {
                     Class classInstance = classLoader.loadClass(c);
-                    if (classInstance != null && isPublicClass(classInstance) && !classInstance.isEnum()
-                            && !classInstance.isInterface()) {
+                    if (classInstance != null && isPublicClass(classInstance) && !classInstance.isEnum()) {
                         JClass jClass = new JClass(classInstance);
                         String outputFile = Paths.get(modulePath.toString(), jClass.packageName).toString();
                         createDirectory(outputFile);
